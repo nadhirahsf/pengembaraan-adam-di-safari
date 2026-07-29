@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengembaraan Safari Adam - Head-Tilting Game</title>
+    
+    <!-- Pustaka MediaPipe Vision untuk Pengesanan Wajah -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js" crossorigin="anonymous"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Fredoka', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 15px;
+            background-color: #e8f5e9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .game-container {
+            width: 100%;
+            max-width: 900px;
+            background: #ffffff;
+            border: 6px solid #4caf50;
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            position: relative;
+        }
+
+        /* Header & Markah */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff9c4;
+            padding: 10px 20px;
+            border-radius: 16px;
+            border: 3px solid #fbc02d;
+        }
+
+        .title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+
+        .score-board {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #e65100;
+            background: #fff;
+            padding: 6px 16px;
+            border-radius: 12px;
+            border: 2px solid #ff9800;
+        }
+
+        /* Pentas Permainan & Kamera */
+        .stage {
+            position: relative;
+            background: #f1f8e9;
+            border: 3px dashed #7cb342;
+            border-radius: 20px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 380px;
+            justify-content: space-between;
+        }
+
+        /* Kamera Kecil di Penjuru Skrin */
+        .camera-box {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 150px;
+            height: 110px;
+            border-radius: 12px;
+            border: 3px solid #4caf50;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Cermin kamera */
+        }
+
+        /* Panduan Arah (Ikon Kiri & Kanan) */
+        .direction-guides {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .guide-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 50px;
+            transition: all 0.2s ease;
+        }
+
+        .guide-left {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 3px solid #4caf50;
+        }
+
+        .guide-right {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 3px solid #ef5350;
+        }
+
+        .guide-btn.active-left {
+            background-color: #4caf50;
+            color: #fff;
+            transform: scale(1.1);
+        }
+
+        .guide-btn.active-right {
+            background-color: #ef5350;
+            color: #fff;
+            transform: scale(1.1);
+        }
+
+        /* Kad Soalan & Teks (Hanya Ditulis) */
+        .question-card {
+            text-align: center;
+            margin: 30px 0;
+            max-width: 85%;
+        }
+
+        .question-text {
+            font-size: 1.9rem;
+            font-weight: bold;
+            color: #2c3e50;
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        /* Mesej Maklum Balas Visual */
+        .status-msg {
+            font-size: 1.5rem;
+            font-weight: bold;
+            min-height: 40px;
+            text-align: center;
+        }
+
+        .status-msg.success { color: #2e7d32; }
+        .status-msg.error { color: #c62828; }
+
+        /* Skrin Bermula (Kamera Activation) */
+        .start-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            text-align: center;
+            z-index: 20;
+        }
+
+        .start-btn {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 16px 36px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px #2e7d32;
+            margin-top: 20px;
+        }
+
+        .start-btn:hover { background-color: #43a047; }
+
+        /* Skrin Tamat */
+        .end-screen {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .end-screen h2 {
+            font-size: 2rem;
+            color: #2e7d32;
+        }
+
+        .final-score {
+            font-size: 2.5rem;
+            color: #e65100;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .feedback-text {
+            font-size: 1.4rem;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .restart-btn {
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            font-size: 1.4rem;
+            font-weight: bold;
+            border-radius: 40px;
+            cursor: pointer;
+            box-shadow: 0 6px #1565c0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <!-- Header -->
+    <div class="header">
+        <div class="title">🦁 Safari Adam: Head-Tilting Game</div>
+        <div class="score-board">⭐ Skor: <span id="score">0</span> / 50</div>
+    </div>
+
+    <!-- Skrin Utama Permainan -->
+    <div id="game-play" style="position: relative;">
+        <!-- Skrin Mula Kamera -->
+        <div class="start-overlay" id="start-overlay">
+            <h2>📷 Arahan Permainan</h2>
+            <p style="font-size: 1.2rem; max-width: 600px; color: #444;">
+                Pastikan wajah anda jelas kelihatan di hadapan kamera.<br><br>
+                Berdasarkan cerita <b>Pengembaraan Safari Bersama Adam</b>, baca pernyataan yang ditulis secara teliti:<br><br>
+                👈 Condongkan kepala ke <b>KIRI</b> jika <b>BETUL</b><br>
+                👉 Condongkan kepala ke <b>KANAN</b> jika <b>SALAH</b>
+            </p>
+            <button class="start-btn" id="start-btn" onclick="initCamera()">Benarkan Kamera & Mula 🚀</button>
+            <p id="camera-error" style="color: red; font-weight: bold; margin-top: 15px; display: none;"></p>
+        </div>
+
+        <div class="stage">
+            <!-- Kamera Viewport Kecil -->
+            <div class="camera-box">
+                <video id="webcam" autoplay playsinline></video>
+            </div>
+
+            <!-- Panduan Condong -->
+            <div class="direction-guides">
+                <div class="guide-btn guide-left" id="guide-left">
+                    👈 Condong Kiri = BETUL
+                </div>
+                <div class="guide-btn guide-right" id="guide-right">
+                    Condong Kanan = SALAH 👉
+                </div>
+            </div>
+
+            <!-- Kad Soalan (Teks Sahaja) -->
+            <div class="question-card">
+                <p class="question-text" id="question-text">Memuatkan soalan...</p>
+            </div>
+
+            <!-- Status Maklum Balas -->
+            <div class="status-msg" id="status-msg"></div>
+        </div>
+    </div>
+
+    <!-- Skrin Tamat Permainan -->
+    <div class="end-screen" id="end-screen">
+        <h2>🎉 Tahniah! Anda telah berjaya melengkapkan Cabaran Kefahaman Safari Adam!</h2>
+        <div class="final-score">Skor Akhir: <span id="final-score-val">0</span> / 50 markah</div>
+        <div class="feedback-text" id="feedback-text"></div>
+        <button class="restart-btn" onclick="restartGame()">🔄 Main Semula</button>
+    </div>
+</div>
+
+<script>
+    // Data Soalan
+    const questions = [
+        { text: "Adam dan keluarganya pergi ke safari untuk melihat haiwan yang menakjubkan.", answer: "BETUL" },
+        { text: "Mereka menaiki lori berwarna biru sepanjang pengembaraan.", answer: "SALAH" },
+        { text: "Gajah menggunakan belalai untuk minum, makan dan berinteraksi.", answer: "BETUL" },
+        { text: "Ular tidak memberikan faedah kepada alam sekitar.", answer: "SALAH" },
+        { text: "Monyet ialah haiwan yang bijak dan suka bermain antara satu sama lain.", answer: "BETUL" }
+    ];
+
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let isProcessingAnswer = false; 
+    let faceLandmarker;
+    let video;
+    let lastVideoTime = -1;
+
+    // DOM Elements
+    const questionText = document.getElementById('question-text');
+    const statusMsg = document.getElementById('status-msg');
+    const scoreDisplay = document.getElementById('score');
+    const guideLeft = document.getElementById('guide-left');
+    const guideRight = document.getElementById('guide-right');
+    const cameraError = document.getElementById('camera-error');
+
+    // Inisialisasi Permainan & Paparan Teks Soalan
+    function loadQuestion() {
+        if (currentQuestionIndex < questions.length) {
+            questionText.innerText = `Soalan ${currentQuestionIndex + 1}: ${questions[currentQuestionIndex].text}`;
+            statusMsg.innerText = "";
+            statusMsg.className = "status-msg";
+            isProcessingAnswer = false;
+        } else {
+            showEndScreen();
+        }
+    }
+
+    // Inisialisasi MediaPipe Face Landmarker
+    async function createFaceLandmarker() {
+        const { FaceLandmarker, FilesetResolver } = window.vision;
+        const filesetResolver = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+        );
+        faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+            baseOptions: {
+                modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+                delegate: "GPU"
+            },
+            outputFaceBlendshapes: false,
+            runningMode: "VIDEO",
+            numFaces: 1
+        });
+    }
+
+    // Mula Kamera Web
+    async function initCamera() {
+        cameraError.style.display = 'none';
+        video = document.getElementById('webcam');
+
+        try {
+            await createFaceLandmarker();
+            const constraints = { video: { width: 640, height: 480 } };
+            
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            video.addEventListener("loadeddata", predictWebcam);
+            
+            document.getElementById('start-overlay').style.display = 'none';
+            loadQuestion();
+        } catch (err) {
+            console.error(err);
+            cameraError.style.display = 'block';
+            cameraError.innerText = "❌ Gagal mengakses kamera. Sila pastikan anda menggunakan pautan HTTPS (GitHub Pages/Netlify) dan membenarkan (Allow) akses kamera pada pelayar web anda.";
+        }
+    }
+
+    // Imbas Real-Time Head Pose
+    async function predictWebcam() {
+        if (lastVideoTime !== video.currentTime && faceLandmarker) {
+            lastVideoTime = video.currentTime;
+            const results = faceLandmarker.detectForVideo(video, performance.now());
+
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const landmarks = results.faceLandmarks[0];
+                
+                const leftEye = landmarks[33];
+                const rightEye = landmarks[263];
+
+                const deltaX = rightEye.x - leftEye.x;
+                const deltaY = rightEye.y - leftEye.y;
+                const angleRad = Math.atan2(deltaY, deltaX);
+                const angleDeg = angleRad * (180 / Math.PI);
+
+                detectTilt(angleDeg);
+            }
+        }
+        requestAnimationFrame(predictWebcam);
+    }
+
+    // Mengesan Condong & Penilaian
+    function detectTilt(angle) {
+        if (isProcessingAnswer) return;
+
+        const tiltThreshold = 15; // Had Sudut 15-20 darjah
+
+        if (angle < -tiltThreshold) {
+            // Condong Kiri (BETUL)
+            guideLeft.classList.add('active-left');
+            guideRight.classList.remove('active-right');
+            processUserSelection("BETUL");
+        } else if (angle > tiltThreshold) {
+            // Condong Kanan (SALAH)
+            guideRight.classList.add('active-right');
+            guideLeft.classList.remove('active-left');
+            processUserSelection("SALAH");
+        } else {
+            // Kedudukan Asal / Neutral
+            guideLeft.classList.remove('active-left');
+            guideRight.classList.remove('active-right');
+        }
+    }
+
+    // Semak Jawapan
+    function processUserSelection(userChoice) {
+        isProcessingAnswer = true;
+        const correctAnswer = questions[currentQuestionIndex].answer;
+
+        if (userChoice === correctAnswer) {
+            // JAWAPAN BETUL
+            statusMsg.innerText = "🎉 Tahniah! Jawapan anda betul! ✓";
+            statusMsg.className = "status-msg success";
+
+            score += 10;
+            scoreDisplay.innerText = score;
+
+            setTimeout(() => {
+                currentQuestionIndex++;
+                loadQuestion();
+            }, 2000);
+        } else {
+            // JAWAPAN SALAH
+            statusMsg.innerText = "❌ Jawapan kurang tepat. ✗";
+            statusMsg.className = "status-msg error";
+
+            setTimeout(() => {
+                statusMsg.innerText = "";
+                isProcessingAnswer = false;
+            }, 2000);
+        }
+    }
+
+    // Paparan Skrin Keputusan Akhir
+    function showEndScreen() {
+        document.getElementById('game-play').style.display = "none";
+        const endScreen = document.getElementById('end-screen');
+        const feedbackText = document.getElementById('feedback-text');
+        document.getElementById('final-score-val').innerText = score;
+
+        let feedbackMsg = "";
+        if (score === 50) {
+            feedbackMsg = "🌟 Hebat! Anda memahami cerita dengan sangat baik.";
+        } else if (score === 40) {
+            feedbackMsg = "😊 Bagus! Teruskan membaca.";
+        } else if (score === 30) {
+            feedbackMsg = "👍 Anda semakin mahir. Cuba lagi untuk markah penuh.";
+        } else {
+            feedbackMsg = "💪 Jangan putus asa! Mari baca semula cerita dan cuba sekali lagi.";
+        }
+
+        feedbackText.innerText = feedbackMsg;
+        endScreen.style.display = "block";
+    }
+
+    // Mula Semula Permainan
+    function restartGame() {
+        currentQuestionIndex = 0;
+        score = 0;
+        scoreDisplay.innerText = score;
+        document.getElementById('end-screen').style.display = "none";
+        document.getElementById('game-play').style.display = "block";
+        loadQuestion();
+    }
+</script>
+
+</body>
+</html>
